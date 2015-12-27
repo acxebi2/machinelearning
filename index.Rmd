@@ -1,0 +1,89 @@
+---
+title: "Coursera Machine Learning"
+author: "Andy K"
+date: "December 26, 2015"
+output: html_document
+---
+
+##Executive Summary
+
+HAR (Human Activity Recognition) data for this study was obtained from the following source:
+
+*Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6*
+
+In addition to the "classe" field, which was used as the classification variable, there were 158 fields which could be used as prediction variables.  Fields such as "kurtosis_roll_belt" and "kurtosis_roll_arm" were unpopulated for most of the cases.  Other fields such as "max_roll_belt" and "amplitude_roll_belt" were mostly populated with "NA". All of these fields were eliminated from the final dataset.  In addition, as the dataset was not structured as a time series, timestamp fields were eliminated.  This reduced the number of prediction variables in the final dataset to 58.  This final dataset was separated into the "inSample" training set and "outSample" testing set. "inSample"  was used to train a Random Forest Model.  This gave rise to a model with mtry=28, with .9952 accuracy. The model predicted with .9971 accuracy on the "outSample"" test set.
+
+##Discussion
+The dataset was separated into "inSample" and "outSample" as follows:
+```{r, echo=FALSE}
+library(caret)
+library(AppliedPredictiveModeling)
+library(ggplot2)
+library(gridExtra)
+trainAll=read.csv("pml-training-small.csv")
+testing=read.csv("pml-testing-small.csv")
+load(file="projModel.rda")
+#getTree(mF1$finalModel,k=1)
+```
+
+```{r}
+set.seed(1000)
+inTrain=createDataPartition(y=trainAll$classe,
+                            p=0.7,list=FALSE)
+inSample=trainAll[inTrain,]
+outSample=trainAll[-inTrain,]
+```
+
+**Model training and results:**
+```{r, eval=FALSE}
+set.seed(10152)
+mF1=train(classe ~ .,data=inSample,method="rf",prox=TRUE)
+save(mF1, file="projModel.rda")
+```
+
+```{r}
+mF1
+```
+
+The prediction accuracy on the test set is 99.71%, with a 95% confidence interval of 99.54% - 99.83%.    
+
+**Prediction outcomes on test set:**
+
+```{r}
+confusionMatrix(outSample$classe,predict(mF1,outSample))
+```
+
+**Most important model variables:**
+
+```{r echo=FALSE}
+varImp(mF1)
+```
+
+**Class Centers using 2 most important variables:**
+
+```{r plot1, fig.width=6,fig.height=4, echo=FALSE}
+inP=classCenter(inSample[,c(2,3)],inSample$classe, mF1$finalModel$prox)
+inP=as.data.frame(inP)
+inP$classe=rownames(inP)
+p1=qplot(num_window, roll_belt, col=classe, data=inSample)
+p1=p1+geom_point(aes(x=num_window,y=roll_belt,col=classe),size=5,shape=4,data=inP)
+p1
+```
+
+<div class="pagebreak"></div>
+
+**Prediction Accuracy on Test Set:**
+
+```{r plot2, fig.width=6,fig.height=4, echo=FALSE}
+outSample$predRight=(outSample$classe==predict(mF1,outSample))
+p2=qplot(num_window, roll_belt, col=predRight, data=outSample)
+p2
+#p1=ggplot(aes(x=num_window, y=roll_belt),data=outSample)+
+#  geom_point(aes(color=factor(classe)),size=5)
+#p2=ggplot(aes(x=num_window, y=roll_belt),data=outSample)+
+#  geom_point(aes(color=factor(predRight)),size=5)
+#grid.arrange(p1,p2, ncol=1)
+```
+
+##Conclusion
+The Random Forest model using 58 variables representing accelerometer readings appears to nearly perfectly classify human movement (99.5-99.8% accuracy)
